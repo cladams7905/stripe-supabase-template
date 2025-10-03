@@ -5,10 +5,12 @@ A simple, ready-to-use template for building web apps with Next.js, Supabase aut
 ## What's Inside
 
 - ✅ **Next.js 15** - Modern React framework with App Router
-- ✅ **Supabase** - User authentication (signup, login, logout)
+- ✅ **React 19** - Latest React with Server Components
+- ✅ **Supabase** - User authentication with Server Actions
 - ✅ **Stripe** - Payment processing
 - ✅ **Tailwind CSS 4.0** - Modern utility-first CSS framework
 - ✅ **TypeScript** - Type-safe code
+- ✅ **Server Components** - Server-side rendering by default
 - ✅ **Example Pages** - Fully commented code for learning
 
 ## Getting Started
@@ -68,55 +70,89 @@ Open [http://localhost:3000](http://localhost:3000) in your browser. You should 
 
 ## Project Structure
 
-This template uses the **Next.js App Router** (the modern way to build Next.js apps):
+This template uses the **Next.js App Router** with the `src/` directory:
 
 ```
-├── app/                    # App Router directory (Next.js 15)
-│   ├── layout.tsx         # Root layout (wraps all pages)
-│   ├── page.tsx           # Home page (/)
-│   ├── globals.css        # Global styles with Tailwind 4.0
-│   ├── auth/
-│   │   ├── signup/page.tsx   # Sign up page
-│   │   ├── login/page.tsx    # Login page
-│   │   └── logout/page.tsx   # Logout handler
-│   ├── dashboard/page.tsx    # Protected user dashboard
-│   ├── payment/page.tsx      # Payment demo page
-│   ├── success/page.tsx      # Payment success page
-│   ├── cancel/page.tsx       # Payment cancelled page
-│   └── api/
-│       └── create-checkout/route.ts  # Stripe checkout API
-├── lib/
-│   ├── supabase.ts        # Supabase client and auth functions
-│   └── stripe.ts          # Stripe payment functions
-├── .env.example           # Environment variables template
-└── README.md             # This file
+├── src/
+│   ├── app/                      # App Router directory (Next.js 15)
+│   │   ├── layout.tsx           # Root layout (wraps all pages)
+│   │   ├── page.tsx             # Home page (/) - Server Component
+│   │   ├── globals.css          # Global styles with Tailwind 4.0
+│   │   ├── auth/
+│   │   │   ├── actions.ts       # Server Actions for auth
+│   │   │   ├── signup/page.tsx  # Sign up page
+│   │   │   ├── login/page.tsx   # Login page
+│   │   │   └── logout/page.tsx  # Logout handler
+│   │   ├── dashboard/page.tsx   # Protected dashboard - Server Component
+│   │   ├── payment/page.tsx     # Payment demo page
+│   │   ├── success/page.tsx     # Payment success page
+│   │   ├── cancel/page.tsx      # Payment cancelled page
+│   │   └── api/
+│   │       └── create-checkout/route.ts  # Stripe checkout API
+│   └── lib/
+│       ├── supabase-server.ts   # Supabase server-side client
+│       └── stripe.ts            # Stripe payment functions
+├── public/                       # Static assets
+├── .env.example                 # Environment variables template
+├── package.json                 # Dependencies
+└── README.md                    # This file
 ```
 
 ## How to Use
 
 ### Authentication
 
-All authentication functions are in `lib/supabase.ts`:
+This template uses **Server Actions** for authentication - the secure, modern way to handle auth in Next.js.
+
+**Server-side authentication** (in Server Components):
 
 ```typescript
-import { signUp, signIn, signOut, getCurrentUser } from "@/lib/supabase";
+// src/app/page.tsx or src/app/dashboard/page.tsx
+import { getCurrentUser } from "@/lib/supabase-server";
 
-// Sign up a new user
-const { user, error } = await signUp("email@example.com", "password123");
+export default async function Page() {
+  const user = await getCurrentUser();
 
-// Sign in
-const { user, error } = await signIn("email@example.com", "password123");
+  if (!user) {
+    redirect("/auth/login");
+  }
 
-// Sign out
-await signOut();
-
-// Get current user
-const user = await getCurrentUser();
+  return <div>Welcome {user.email}</div>;
+}
 ```
+
+**Client-side authentication** (using Server Actions):
+
+```typescript
+// src/app/auth/login/page.tsx
+"use client";
+
+import { signInAction } from "../actions";
+
+export default function Login() {
+  async function handleSubmit(formData: FormData) {
+    const result = await signInAction(formData);
+    // Server Action handles auth and redirects automatically
+  }
+
+  return (
+    <form action={handleSubmit}>
+      <input type="email" name="email" required />
+      <input type="password" name="password" required />
+      <button type="submit">Login</button>
+    </form>
+  );
+}
+```
+
+Available Server Actions in `src/app/auth/actions.ts`:
+- `signUpAction(formData)` - Create a new user account
+- `signInAction(formData)` - Sign in existing user
+- `logoutAction()` - Sign out current user
 
 ### Payments
 
-Payment functions are in `lib/stripe.ts`. The template includes a working example:
+Payment functions are in `src/lib/stripe.ts`. The template includes a working example:
 
 1. Go to `/payment` page
 2. Click "Pay with Stripe"
@@ -125,27 +161,35 @@ Payment functions are in `lib/stripe.ts`. The template includes a working exampl
 
 To customize the payment:
 
-1. Open `app/payment/page.tsx`
+1. Open `src/app/payment/page.tsx`
 2. Change the `priceInCents` (1000 = $10.00)
 3. Change the `productName` to your product
 
 ### Protected Pages
 
-See `app/dashboard/page.tsx` for an example of a page that requires login:
+**Server Component approach** (recommended) - see `src/app/dashboard/page.tsx`:
 
 ```typescript
-"use client"; // Client component for authentication check
+// Protected Server Component
+import { getCurrentUser } from "@/lib/supabase-server";
+import { redirect } from "next/navigation";
 
-useEffect(() => {
-  async function checkAuth() {
-    const user = await getCurrentUser();
-    if (!user) {
-      router.push("/auth/login"); // Redirect to login
-    }
+export default async function Dashboard() {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    redirect("/auth/login");
   }
-  checkAuth();
-}, []);
+
+  return <div>Welcome to your dashboard, {user.email}!</div>;
+}
 ```
+
+This approach is better because:
+- ✅ No loading states needed
+- ✅ Auth checked before page renders
+- ✅ Better SEO (server-rendered)
+- ✅ Faster initial page load
 
 ### Styling with Tailwind CSS 4.0
 
@@ -160,7 +204,7 @@ This template uses **Tailwind CSS 4.0** with the new CSS import syntax. All comp
 
 To customize styles:
 
-- Edit `app/globals.css` for global styles
+- Edit `src/app/globals.css` for global styles
 - Use Tailwind classes directly in your components
 - Extend the theme in `tailwind.config.ts`
 
@@ -168,62 +212,103 @@ To customize styles:
 
 ### For Beginners - Where to Start:
 
-1. **Change the home page**: Edit `app/page.tsx`
-2. **Customize the dashboard**: Edit `app/dashboard/page.tsx`
-3. **Add your product**: Edit `app/payment/page.tsx`
-4. **Style your app**: Use Tailwind classes or edit `app/globals.css`
+1. **Change the home page**: Edit `src/app/page.tsx`
+2. **Customize the dashboard**: Edit `src/app/dashboard/page.tsx`
+3. **Add your product**: Edit `src/app/payment/page.tsx`
+4. **Style your app**: Use Tailwind classes or edit `src/app/globals.css`
 
 ### Adding New Pages (App Router):
 
 With the App Router, you create pages using folders and `page.tsx` files:
 
-1. Create a new folder in the `app/` directory
+1. Create a new folder in the `src/app/` directory
 2. Add a `page.tsx` file inside
-3. Example: `app/about/page.tsx` creates the route `/about`
+3. Example: `src/app/about/page.tsx` creates the route `/about`
 
 ```tsx
-// app/about/page.tsx
+// src/app/about/page.tsx
 export default function About() {
   return <div>About page content</div>;
 }
 ```
 
-### Client vs Server Components:
+### Server Components vs Client Components:
 
-By default, components in the `app/` directory are **Server Components** (faster, more efficient). Add `'use client'` at the top of the file if you need:
+By default, all components are **Server Components** (faster, better SEO). Only use `'use client'` when you need:
 
 - `useState`, `useEffect`, or other React hooks
 - Event handlers (onClick, onChange, etc.)
-- Browser APIs
+- Browser APIs (localStorage, window, etc.)
 
 ```tsx
+// src/app/counter/page.tsx
 "use client"; // Add this for client-side features
 
 import { useState } from "react";
 
-export default function MyPage() {
+export default function Counter() {
   const [count, setCount] = useState(0);
   return <button onClick={() => setCount(count + 1)}>{count}</button>;
 }
 ```
+
+**When to use Server Components (default):**
+- Fetching data
+- Accessing backend resources directly
+- Keeping sensitive information on the server (API keys, etc.)
+- Pages that need SEO
+
+**When to use Client Components:**
+- Interactive UI (forms, buttons with state)
+- Event listeners
+- Browser-only APIs
 
 ### Adding Database Tables:
 
 1. Go to your Supabase project
 2. Click on **Table Editor**
 3. Create new tables
-4. Use the Supabase client to query them:
+4. Use the Supabase server client in Server Components:
 
 ```typescript
-import { supabase } from "@/lib/supabase";
+// In a Server Component or Server Action
+import { createClient } from "@/lib/supabase-server";
 
-// Insert data
-const { data, error } = await supabase
-  .from("your_table")
-  .insert({ column: "value" });
+export default async function MyPage() {
+  const supabase = await createClient();
 
-// Query data
-const { data, error } = await supabase.from("your_table").select("*");
+  // Query data
+  const { data, error } = await supabase.from("your_table").select("*");
+
+  // Insert data
+  const { error: insertError } = await supabase
+    .from("your_table")
+    .insert({ column: "value" });
+
+  return <div>{/* render your data */}</div>;
+}
+```
+
+Or use Server Actions for mutations:
+
+```typescript
+// src/app/actions.ts
+"use server";
+
+import { createClient } from "@/lib/supabase-server";
+
+export async function addItem(formData: FormData) {
+  const supabase = await createClient();
+  const name = formData.get("name");
+
+  const { error } = await supabase.from("items").insert({ name });
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath("/");
+}
 ```
 
 ## Testing Payments
